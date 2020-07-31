@@ -1,0 +1,132 @@
+#!/bin/bash
+
+#
+# サーバーに残っているインクリメンタルバックアップファイルから
+# リストアの準備、及び適用を行うためのスクリプト。
+#
+# [prepare]
+#   ./restore_incremental.sh -d 20170101 -n 15 -o /tmp prepare
+#
+# [restore]
+#   service mysql stop # <= manual
+#   ./restore_incremental.sh -d 20170101 -n 15 -o /tmp restore
+#
+
+set -eu
+
+MYSQL_PIDFILE="{{ xtrabackup_mysql_pidfile }}"
+MYSQL_DATADIR="{{ xtrabackup_mysql_datadir }}"
+BACKUP_DIR={{ xtrabackup_target_dir }}
+
+function usage() {
+  echo "Usage: $0 [-d YYYYMMDD] [-n number] [-o /path/to/output/directory (default is current dir)] {prepare|restore}"
+}
+
+while getopts d:n:o:h OPT
+do
+  case $OPT in
+    "d" ) TARGET_DATE="$OPTARG" ;;
+    "o" ) OUTPUT_DIR="$OPTARG" ;;
+    "n" ) DIR_NUMBER="$OPTARG" ;;
+    "h" ) usage ; exit 0 ;;
+  esac
+done
+
+shift $((OPTIND - 1))
+
+set +u
+if [ -z $OUTPUT_DIR ]; then
+  OUTPUT_DIR=`pwd`
+fi
+set -u
+
+if [ ! -e $OUTPUT_DIR ]; then
+  echo "Directory not found : '${OUTPUT_DIR}'"
+  exit 2
+fi
+
+# Check options
+echo "TARGET_DATE: ${TARGET_DATE}"
+echo "DIR_NUMBER:  ${DIR_NUMBER}"
+echo "OUTPUT_DIR:  ${OUTPUT_DIR}"
+
+BASE_DIRNAME=${TARGET_DATE}_${DIR_NUMBER}
+
+function check_mysql_alive() {
+  mysqld_pid=$(cat $MYSQL_PIDFILE 2>/dev/null)
+  if [ ! $mysqld_pid ]; then
+    return 1
+  else
+    /bin/kill -0 $mysqld_pid &>/dev/null
+    return $?
+  fi
+}
+
+function prepare_backup() {
+  base_src="${BACKUP_DIR}/${TARGET_DATE}/0"
+  base_dst="${OUTPUT_DIR}/${BASE_DIRNAME}"
+
+  # 1. ベースのフルバックアップをコピー
+  if [ ! -e ${base_src} ]; then
+    echo "Not found base full backup : ${base_src}"
+    exit 4
+  fi
+  mkdir -p ${base_dst}
+  cp -r ${base_src}/* ${base_dst}/
+  # 2. ベースを適用
+  innobackupex --apply-log --redo-only ${base_dst}
+  # 3. 増分を適用
+  for dir in `seq 1 ${DIR_NUMBER}`
+  do
+    incr_dir="${BACKUP_DIR}/${TARGET_DATE}/${dir}"
+    if [ ! -e $incr_dir ]; then
+      break
+    fi
+    innobackupex --apply-log --redo-only ${base_dst} --incremental-dir=${incr_dir}
+  done
+  # 4. バックアップの準備をする
+  innobackupex --apply-log ${base_dst}
+}
+
+function restore_backup() {
+  tmp_bk_dir=${OUTPUT_DIR}/mysql_datadir_bk_`date +"%Y%m%d-%H%M%S"`
+  dirname=${OUTPUT_DIR}/${BASE_DIRNAME}
+
+  # 1. datadir を空にする（退避）
+  mkdir -p ${tmp_bk_dir}
+  mv ${MYSQL_DATADIR}/* ${tmp_bk_dir}/
+  # 2. リストアを実行
+  innobackupex --copy-back ${dirname}
+  # 3. ファイルの所有者を変更
+  chown -R mysql:mysql ${MYSQL_DATADIR}
+}
+
+
+set +u
+action="$1"
+set -u
+
+case "$action" in
+  prepare)
+    if [ ! -e ${BACKUP_DIR}/${TARGET_DATE} ]; then
+      echo "Not found target backup dir. : ${BACKUP_DIR}/${TARGET_DATE}"
+      exit 4
+    fi
+    prepare_backup
+    ;;
+  restore)
+    if [ ! -e ${OUTPUT_DIR}/${BASE_DIRNAME} ]; then
+      echo "Not found prepared files."
+      exit 5
+    fi
+    if check_mysql_alive ; then
+      echo "MySQL must be stopped."
+      exit 6
+    fi
+    restore_backup
+    ;;
+  *)
+    echo "Specify {prepare|restore}."
+    usage; exit 1
+esac
+

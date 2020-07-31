@@ -1,0 +1,16 @@
+---
+# tasks/pre_check.yml (xtrabackup)
+# Prefix : xtrabackup
+
+- name: Check for deleted variables
+  shell: >-
+    echo "[WARNING]: 以下の変数は削除されました. 以下の URL を確認してください. @y_hashida";
+    echo "    https://github.com/link-u/ansible-roles-v2_xtrabackup/blob/master/README.md#削除された変数の一覧";
+    {% if xtrabackup_package_install is defined %}
+      echo "xtrabackup_package_install";
+    {% endif %}
+  register: __xtrabackup_check_deleted_vars
+  check_mode: no
+  changed_when:
+    - (__xtrabackup_check_deleted_vars.stdout_lines | length) != 2
+  notify: "Print warning for xtrabackup (Check for deleted variables)"

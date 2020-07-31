@@ -1,0 +1,55 @@
+---
+# defaults/main.yml (xtrabackup)
+# Prefix : xtrabackup
+
+### インストール設定 ###############################################################################
+xtrabackup_install_flag: True
+xtrabackup_cron_file: /etc/cron.d/xtrabackup
+xtrabackup_db_user: root
+xtrabackup_db_host: 127.0.0.1
+xtrabackup_db_password: "{{ pxc_root_password | default('default&root&password') }}"
+xtrabackup_target_dir: /var/lib/xtrabackup
+xtrabackup_user: root
+
+
+### 追加設定 ######################################################################################
+# バックアップを実行するホスト
+xtrabackup_target_hosts: "{{ ansible_play_hosts }}"
+
+# 1時間ごとのincremental backupを行うかどうか
+xtrabackup_does_hourly_backup: yes
+
+# clean backup files
+xtrabackup_scripts_dir: "{{ xtrabackup_target_dir }}/scripts"
+
+xtrabackup_datetimes:
+  full:
+    days_duration: 7 # この日数経過後にバックアップを削除
+    removing_hour: 2 # 削除処理の実行時刻
+    creating_hour: 4 # バックアップ処理の実行時刻
+  incremental:
+    days_duration: 5
+    removing_hour: 2
+    # 作成は毎時行われるのでcreating_hourは無し
+
+xtrabackup_encrypt_password: "default&encrypt&password"
+xtrabackup_gdrive: no
+# xtrabackup_gdrive:
+#   host: 対象のansibleホスト名（gdriveでアップロードする場合は必須）
+#   command: /usr/local/src/gdrive/upload_xtrabackup.sh # 実際にアップロードするスクリプト
+
+# gdriveコマンドのフルパス
+xtrabackup_gdrive_command: "{{ gdrive_install_dest | default('/usr/local/bin') }}/gdrive"
+
+# リストアスクリプトに使用
+xtrabackup_mysql_pidfile: /var/run/mysqld/mysqld.pid
+xtrabackup_mysql_datadir: /var/lib/mysql
+
+# 圧縮するかどうか
+xtrabackup_compressed_backup: yes
+xtrabackup_compressed_full_backup: "{{ xtrabackup_compressed_backup }}"
+xtrabackup_compressed_incremental_backup: "{{ xtrabackup_compressed_backup }}"
+# --compress-threadsの数
+xtrabackup_compressed_threads: 4
+xtrabackup_compressed_full_backup_threads: "{{ xtrabackup_compressed_threads }}"
+xtrabackup_compressed_incremental_backup_threads: "{{ xtrabackup_compressed_threads }}"

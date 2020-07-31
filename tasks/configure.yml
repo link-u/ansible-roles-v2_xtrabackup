@@ -1,0 +1,70 @@
+- name: Create directory for scripts
+  become: yes
+  file:
+    path: "{{ xtrabackup_scripts_dir }}"
+    state: directory
+    owner: "{{ xtrabackup_user }}"
+    group: "{{ xtrabackup_user }}"
+    mode: 0755
+
+- name: Set increment backup script
+  template:
+    src: incremental_backup.j2
+    dest: "{{ xtrabackup_scripts_dir }}/incremental_backup.sh"
+    owner: "{{ xtrabackup_user }}"
+    group: "{{ xtrabackup_user }}"
+    mode: 0700
+  when:
+    - xtrabackup_does_hourly_backup
+
+- name: Check default password for root user
+  debug:
+    msg: "Please change encrypt password from default"
+  failed_when: True
+  when:
+    - xtrabackup_encrypt_password == "default&encrypt&password"
+
+- name: Set encrypt script
+  template:
+    src: encrypt.j2
+    dest: "{{ xtrabackup_scripts_dir }}/encrypt.sh"
+    owner: "{{ xtrabackup_user }}"
+    group: "{{ xtrabackup_user }}"
+    mode: 0700
+
+- name: Register hourly cron - Create increment backup every hour
+  cron:
+    name: Create increment backup every hour
+    user: "{{ xtrabackup_user }}"
+    cron_file: "{{ xtrabackup_cron_file }}"
+    minute: "1"
+    job: "{{ xtrabackup_scripts_dir }}/incremental_backup.sh {{ xtrabackup_target_dir }}/`date +'\\%Y\\%m\\%d'`"
+  when:
+    - xtrabackup_does_hourly_backup | bool
+
+- name: Register daily cron - Create compressed full backup everyday
+  cron:
+    name: Create Compressed full backup everyday
+    user: "{{ xtrabackup_user }}"
+    cron_file: "{{ xtrabackup_cron_file }}"
+    minute: "31"
+    hour: "{{ xtrabackup_datetimes.full.creating_hour }}"
+    job:
+      innobackupex
+      --user='{{ xtrabackup_db_user }}'
+      --password='{{ xtrabackup_db_password }}'
+      --stream=xbstream
+      {% if xtrabackup_compressed_full_backup -%}
+      --compress
+      --compress-threads={{ xtrabackup_compressed_full_backup_threads }}
+      {% endif -%}
+      --host='{{ xtrabackup_db_host }}' . > {{ xtrabackup_target_dir }}/`date +"\%Y\%m\%d"`.xbstream
+      {% if xtrabackup_gdrive and inventory_hostname == xtrabackup_gdrive.host %}
+      && {{ xtrabackup_gdrive.command }}
+      {% endif %}
+
+- name: Register clean files
+  import_tasks: clean.yml
+
+- name: Register restore files
+  import_tasks: restore.yml

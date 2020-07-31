@@ -1,0 +1,20 @@
+---
+# tasks/main.yml (xtrabackup)
+# Prefix : xtrabackup
+
+- name: Pre-check variables
+  import_tasks: pre_check.yml
+  tags: ["pre_check"]
+
+- block:
+    - name: Install tasks
+      import_tasks: install.yml
+      when:
+        - xtrabackup_install_flag | bool
+      tags: ["install"]
+
+    - name: Configure tasks
+      import_tasks: configure.yml
+      tags: ["configure"]
+  when:
+    - inventory_hostname in xtrabackup_target_hosts

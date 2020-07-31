@@ -1,0 +1,130 @@
+#!/bin/bash
+
+#
+# Googleドライブから指定日のフルバックアップファイルをダウンロードして
+# リストアの準備、及び適用を行うためのスクリプト。
+#
+# [prepare]
+#   ./restore_full.sh -d 20170101 -o /tmp prepare
+#
+# [restore]
+#   service mysql stop # <= manual
+#   ./restore_full.sh -d 20170101 -o /tmp restore
+#
+
+set -eu
+
+PREFIX="{{ xtrabackup_gdrive.prefix | default('xtrabackup-') }}"
+MYSQL_PIDFILE="{{ xtrabackup_mysql_pidfile }}"
+MYSQL_DATADIR="{{ xtrabackup_mysql_datadir }}"
+
+function usage() {
+  echo "Usage: $0 [-d YYYYMMDD] [-o /path/to/output/directory (default is current dir)] {prepare|restore}"
+}
+
+while getopts d:o:h OPT
+do
+  case $OPT in
+    "d" ) TARGET_DATE="$OPTARG" ;;
+    "o" ) OUTPUT_DIR="$OPTARG" ;;
+    "h" ) usage ; exit 0 ;;
+  esac
+done
+
+shift $((OPTIND - 1))
+
+set +u
+if [ -z $OUTPUT_DIR ]; then
+  OUTPUT_DIR=`pwd`
+fi
+set -u
+
+if [ ! -e $OUTPUT_DIR ]; then
+  echo "Directory not found : '${OUTPUT_DIR}'"
+  exit 2
+fi
+
+# Check options
+echo "TARGET_DATE: ${TARGET_DATE}"
+echo "OUTPUT_DIR:  ${OUTPUT_DIR}"
+
+BASE_FILENAME="${PREFIX}${TARGET_DATE}"
+
+function download_backup_file() {
+  filename="${BASE_FILENAME}.xbstream.encrypted"
+
+  file_id=`{{ xtrabackup_gdrive_command }} list --no-header --query "trashed = false and name='$filename'" | head -n 1 | cut -d ' ' -f 1`
+  if [ -z $file_id ]; then
+    echo "'$filename' is not found."
+    exit 3
+  fi
+
+  {{ xtrabackup_gdrive_command }} download --path ${OUTPUT_DIR} ${file_id}
+}
+
+function check_mysql_alive() {
+  mysqld_pid=$(cat $MYSQL_PIDFILE 2>/dev/null)
+  if [ ! $mysqld_pid ]; then
+    return 1
+  else
+    /bin/kill -0 $mysqld_pid &>/dev/null
+    return $?
+  fi
+}
+
+function prepare_backup() {
+  encrypted="${OUTPUT_DIR}/${BASE_FILENAME}.xbstream.encrypted"
+  decrypted="${OUTPUT_DIR}/${BASE_FILENAME}.xbstream"
+  dirname="${OUTPUT_DIR}/${BASE_FILENAME}"
+
+  # 1. 復号化（要パスワード入力）
+  openssl aes-256-cbc -d -pass 'pass:{{ xtrabackup_encrypt_password }}' -in ${encrypted} -out ${decrypted}
+  # 2. xbstreamを解凍
+  mkdir -p ${dirname}
+  xbstream -x < ${decrypted} -C ${dirname}
+  # 3. さらに解凍
+  {% if xtrabackup_compressed_full_backup -%}
+  innobackupex --decompress ${dirname}
+  {% endif -%}
+  # 4. バックアップの準備をする
+  innobackupex --apply-log ${dirname}
+}
+
+function restore_backup() {
+  tmp_bk_dir=${OUTPUT_DIR}/mysql_datadir_bk_`date +"%Y%m%d-%H%M%S"`
+  dirname=${OUTPUT_DIR}/${BASE_FILENAME}
+
+  # 1. datadir を空にする（退避）
+  mkdir -p ${tmp_bk_dir}
+  mv ${MYSQL_DATADIR}/* ${tmp_bk_dir}/
+  # 2. リストアを実行
+  innobackupex --copy-back ${dirname}
+  # 3. ファイルの所有者を変更
+  chown -R mysql:mysql ${MYSQL_DATADIR}
+}
+
+
+set +u
+action="$1"
+set -u
+
+case "$action" in
+  prepare)
+    download_backup_file
+    prepare_backup
+    ;;
+  restore)
+    if [ ! -e ${OUTPUT_DIR}/${BASE_FILENAME} ]; then
+      echo "Not found prepared files."
+      exit 5
+    fi
+    if check_mysql_alive ; then
+      echo "MySQL must be stopped."
+      exit 6
+    fi
+    restore_backup
+    ;;
+  *)
+    echo "Specify {prepare|restore}."
+    usage; exit 1
+esac
