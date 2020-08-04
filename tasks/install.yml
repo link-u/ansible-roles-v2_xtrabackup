@@ -1,0 +1,24 @@
+---
+# install/main.yml (xtrabackup)
+# Prefix : xtrabackup
+
+- name: Add apt repository for Percona
+  apt:
+    deb: "http://repo.percona.com/apt/percona-release_latest.generic_all.deb"
+  register: __xtrabackup_add_apt_repo
+
+- name: Update apt repository
+  apt:
+    update_cache: True
+  when: __xtrabackup_add_apt_repo.changed | bool
+
+- name: Install Percona XtraBackup
+  apt:
+    name: percona-xtrabackup-24
+    update_cache: yes
+
+# fullバックアップのリストア時に必要になるためインストール
+- name: Install Qpress
+  apt:
+    name: qpress
+    update_cache: yes

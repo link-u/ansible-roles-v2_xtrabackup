@@ -1,0 +1,15 @@
+---
+
+- name: Put restore scripts
+  become: yes
+  template:
+    src: "{{ item.template }}"
+    dest: "{{ xtrabackup_scripts_dir }}/{{ item.name }}"
+    owner: "{{ xtrabackup_user }}"
+    group: "{{ xtrabackup_user }}"
+    mode: 0700
+  loop:
+    - name: restore_full.sh
+      template: restore_full.j2
+    - name: restore_incremental.sh
+      template: restore_incremental.j2

@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# [リストアの手順]
+#
+# 1. 復号
+#   # openssl aes-256-cbc -d -in [暗号化済みファイル] -out [出力ファイル.xbstream]
+# 2. 復号したらxbstreamを解凍
+#   # xbstream -x < [復号化済みファイル.xbstream] -C [展開先]
+# 3. さらに解凍
+#   qpressが必要なのでインストールされてないならインストール
+#   # apt-get install qpress
+#   # innobackupex --decompress [xbstreamの展開先フォルダ]
+# 4. バックアップの準備をする
+#   # innobackupex --apply-log /path/to/backup
+# 5. my.cnfのdatadirにコピーする
+#   # innobackupex --copy-back /path/to/backup
+# 6. 不要になった*.qpファイルを削除する
+#   # find /var/lib/mysql -type f -name '*.qp' -exec rm {} \;
+# 7. ファイルの所有者を変更
+#   # chown -R mysql:mysql /var/lib/mysql
+
+openssl aes-256-cbc -e -pass 'pass:{{ xtrabackup_encrypt_password }}' -in {{ xtrabackup_target_dir }}/`date +"%Y%m%d"`.xbstream

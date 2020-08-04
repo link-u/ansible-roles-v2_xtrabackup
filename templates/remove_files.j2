@@ -1,0 +1,7 @@
+#!/bin/sh
+
+targets=`{{ xtrabackup_scripts_dir }}/find_dt_fmt_name_files.sh -p "{{ item.pattern }}" -d {{ item.days }} -t {{ item.file_type }} "{{ xtrabackup_target_dir }}"`
+
+for f in $targets; do
+  rm -rf $f
+done

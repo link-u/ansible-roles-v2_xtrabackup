@@ -1,0 +1,58 @@
+#!/bin/bash
+#
+# インクリメンタルバックアップを行うスクリプト
+# ある日付のディレクトリ
+
+set -eu
+
+function usage_exit() {
+  echo "Usage: $0 /path/to/backup/directory" 1>&2
+  exit 1
+}
+
+TARGET_DIR=$1
+
+if [ ! $TARGET_DIR ]; then
+  usage_exit
+fi
+
+function first_full_backup() {
+  innobackupex \
+    --user='{{ xtrabackup_db_user }}' \
+    --password='{{ xtrabackup_db_password }}' \
+    --no-timestamp \
+    --host='{{ xtrabackup_db_host }}' \
+    {% if xtrabackup_compressed_incremental_backup -%}
+    --compress \
+    --compress-threads={{ xtrabackup_compressed_incremental_backup_threads }} \
+    {% endif -%}
+    ${TARGET_DIR}/0
+}
+
+function find_max_dir_number() {
+  find ${TARGET_DIR}/* -maxdepth 0 -type d  -exec basename {} \; | grep -e '^[0-9]\+$' | sort -n | tail -n 1
+}
+
+function incremental_backup() {
+  prev_number=`find_max_dir_number`
+  next_number=$(expr $prev_number + 1)
+
+  innobackupex \
+    --user='{{ xtrabackup_db_user }}' \
+    --password='{{ xtrabackup_db_password }}' \
+    --host='{{ xtrabackup_db_host }}' \
+    --incremental-basedir=${TARGET_DIR}/${prev_number} \
+    --incremental \
+    --no-timestamp \
+    {% if xtrabackup_compressed_incremental_backup -%}
+    --compress \
+    --compress-threads={{ xtrabackup_compressed_incremental_backup_threads }} \
+    {% endif -%}
+    ${TARGET_DIR}/${next_number}
+}
+
+if [ ! -e $TARGET_DIR -o ! -e $TARGET_DIR/0 ]; then
+  first_full_backup
+else
+  incremental_backup
+fi
