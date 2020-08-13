@@ -32,6 +32,9 @@
     group: "{{ xtrabackup_user }}"
     mode: "0700"
 
+## FIXME(@y-hashida):
+#  * ansible 2.9.12 以降では以下の cron はすべて「追加」ではなく「上書き」になってしまう.
+#  * 回避策を考える.
 - name: Register hourly cron - Create increment backup every hour
   cron:
     name: Create increment backup every hour
@@ -42,6 +45,9 @@
   when:
     - xtrabackup_does_hourly_backup | bool
 
+## FIXME(@y-hashida):
+#  * ansible 2.9.12 以降では以下の cron はすべて「追加」ではなく「上書き」になってしまう.
+#  * 回避策を考える.
 - name: Register daily cron - Create compressed full backup everyday
   cron:
     name: Create Compressed full backup everyday
