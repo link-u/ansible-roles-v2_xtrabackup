@@ -7,7 +7,7 @@
     dest: "{{ xtrabackup_scripts_dir }}"
     owner: "{{ xtrabackup_user }}"
     group: "{{ xtrabackup_user }}"
-    mode: 0755
+    mode: "0755"
 
 - name: Put remove scripts
   become: yes
@@ -16,7 +16,7 @@
     dest: "{{ xtrabackup_scripts_dir }}/{{ item.name }}"
     owner: "{{ xtrabackup_user }}"
     group: "{{ xtrabackup_user }}"
-    mode: 0700
+    mode: "0700"
   loop:
     - name: remove_incremental_backup_dir.sh
       file_type: dir

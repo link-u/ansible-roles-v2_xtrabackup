@@ -5,7 +5,7 @@
     state: directory
     owner: "{{ xtrabackup_user }}"
     group: "{{ xtrabackup_user }}"
-    mode: 0755
+    mode: "0755"
 
 - name: Set increment backup script
   template:
@@ -13,7 +13,7 @@
     dest: "{{ xtrabackup_scripts_dir }}/incremental_backup.sh"
     owner: "{{ xtrabackup_user }}"
     group: "{{ xtrabackup_user }}"
-    mode: 0700
+    mode: "0700"
   when:
     - xtrabackup_does_hourly_backup
 
@@ -30,7 +30,7 @@
     dest: "{{ xtrabackup_scripts_dir }}/encrypt.sh"
     owner: "{{ xtrabackup_user }}"
     group: "{{ xtrabackup_user }}"
-    mode: 0700
+    mode: "0700"
 
 - name: Register hourly cron - Create increment backup every hour
   cron:
