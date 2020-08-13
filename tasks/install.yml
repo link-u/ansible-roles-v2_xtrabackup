@@ -2,6 +2,12 @@
 # install/main.yml (xtrabackup)
 # Prefix : xtrabackup
 
+- name: Pre-install packages
+  apt:
+    name: "gpg"
+    state: present
+    update_cache: yes
+
 - name: Add apt repository for Percona
   apt:
     deb: "http://repo.percona.com/apt/percona-release_latest.generic_all.deb"
