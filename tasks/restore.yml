@@ -7,7 +7,7 @@
     dest: "{{ xtrabackup_scripts_dir }}/{{ item.name }}"
     owner: "{{ xtrabackup_user }}"
     group: "{{ xtrabackup_user }}"
-    mode: 0700
+    mode: "0700"
   loop:
     - name: restore_full.sh
       template: restore_full.j2
