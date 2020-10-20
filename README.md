@@ -1,5 +1,7 @@
 # xtrabackup
 
+![ansible ci](https://github.com/link-u/ansible-roles-v2_xtrabackup/workflows/ansible%20ci/badge.svg)
+
 ## 概要
 
 percona-cluster の backup設定用 role
